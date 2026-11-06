@@ -1,0 +1,29 @@
+# Segredos
+.env
+*.pem
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Ferramentas
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Dados locais (fotos, dumps, mídia)
+data/
+media/
+*.sqlite3
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
