@@ -1,0 +1,77 @@
+# Omnifit — bot, api, postgres e caddy (TLS + Basic Auth).
+# Migrações: docker compose run --rm api alembic upgrade head
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-omnifit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omnifit}
+      POSTGRES_DB: ${POSTGRES_DB:-omnifit}
+      TZ: ${TZ:-America/Sao_Paulo}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-omnifit} -d ${POSTGRES_DB:-omnifit}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  bot:
+    build: .
+    command: ["python", "-m", "bot.main"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-omnifit}:${POSTGRES_PASSWORD:-omnifit}@db:5432/${POSTGRES_DB:-omnifit}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - media:/app/media
+    restart: unless-stopped
+
+  api:
+    build: .
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-omnifit}:${POSTGRES_PASSWORD:-omnifit}@db:5432/${POSTGRES_DB:-omnifit}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - media:/app/media:ro
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER:-admin}
+      BASIC_AUTH_HASH: ${BASIC_AUTH_HASH}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  media:
+  caddy_data:
+  caddy_config:
